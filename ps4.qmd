@@ -1,0 +1,362 @@
+---
+title: "PS4"
+author: "Faizan R."
+date: "Feb 5,2025"
+format: 
+  pdf:
+    include-in-header: 
+       text: |
+         \usepackage{fvextra}
+         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+include-before-body:
+  text: |
+    \RecustomVerbatimEnvironment{verbatim}{Verbatim}{
+      showspaces = false,
+      showtabs = false,
+      breaksymbolleft={},
+      breaklines
+    }
+output:
+  echo: false
+  eval: false
+---
+
+**Due 02/07 at 5:00PM Central.**
+
+This submission is my work alone and complies with the 30538 integrity policy. Add your initials to indicate your agreement: \*\*\_\_\*\*
+
+### Github Classroom Assignment Setup and Submission Instructions
+
+1.  **Accepting and Setting up the PS4 Assignment Repository**
+    -   Each student must individually accept the repository for the problem set from Github Classroom ("ps4") -- <https://classroom.github.com/a/hWhtcHqH>
+        -   You will be prompted to select your cnetid from the list in order to link your Github account to your cnetid.
+        -   If you can't find your cnetid in the link above, click "continue to next step" and accept the assignment, then add your name, cnetid, and Github account to this Google Sheet and we will manually link it: <https://rb.gy/9u7fb6>
+    -   If you authenticated and linked your Github account to your device, you should be able to clone your PS4 assignment repository locally.
+    -   Contents of PS4 assignment repository:
+        -   `ps4_template.qmd`: this is the Quarto file with the template for the problem set. You will write your answers to the problem set here.
+2.  **Submission Process**:
+    -   Knit your completed solution `ps4.qmd` as a pdf `ps4.pdf`.
+        -   Your submission does not need runnable code. Instead, you will tell us either what code you ran or what output you got.
+    -   To submit, push `ps4.qmd` and `ps4.pdf` to your PS4 assignment repository. Confirm on Github.com that your work was successfully pushed.
+
+### Grading
+- You will be graded on what was last pushed to your PS4 assignment repository before the assignment deadline
+- Problem sets will be graded for completion as: {missing (0%); ✓- (incomplete, 50%); ✓+ (excellent, 100%)}
+    - The percent values assigned to each problem denote how long we estimate the problem will take as a share of total time spent on the problem set, not the points they are associated with.
+- In order for your submission to be considered complete, you need to push both your `ps4.qmd` and `ps4.pdf` to your repository. Submissions that do not include both files will automatically receive 50% credit.
+
+
+\newpage
+
+```{python}
+import pandas as pd
+import altair as alt
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import time
+
+import warnings
+warnings.filterwarnings('ignore')
+alt.renderers.enable("png")
+```
+
+
+## Step 1: Develop initial scraper and crawler
+
+
+```{python}
+```
+
+
+
+```{python}
+link_here = "https://oig.hhs.gov/fraud/enforcement/"
+resp = requests.get(link_here)
+
+page = resp.text
+soup_obj = BeautifulSoup(page, "html.parser")
+
+all_cards = soup_obj.find_all("li", class_="usa-card")
+
+t_list = []
+d_list = []
+c_list = []
+l_list = []
+
+for x in all_cards:
+    h = x.find("h2", class_="usa-card__heading")
+    
+    if h is not None:
+        a = h.find("a")
+        t = a.text.strip()
+        l = "https://oig.hhs.gov" + a.get("href")
+
+        d = None
+        d_tag = x.find("span", class_="text-base-dark")
+        if d_tag:
+            d = d_tag.text.strip()
+
+        cat = None
+        cat_tag = x.find("li", class_="display-inline-block")
+        if cat_tag:
+            cat = cat_tag.text.strip()
+
+        t_list.append(t)
+        d_list.append(d)
+        c_list.append(cat)
+        l_list.append(l)
+
+out_df = pd.DataFrame({
+    "title": t_list,
+    "date": d_list,
+    "category": c_list,
+    "link": l_list
+})
+
+print(out_df.head())
+```
+
+
+
+
+## Step 2: Making the scraper dynamic
+
+### 1. Turning the scraper into a function 
+
+* a. Pseudo-Code
+
+
+
+
+* b. Create Dynamic Scraper
+
+```{python}
+
+RUN_SCRAPER = False
+
+
+def get_actions_since(m, y):
+    if y < 2013:
+        print("Year has to be 2013 or newer (site doesn't go earlier).")
+        return None
+
+    start_dt = datetime(y, m, 1)
+
+    titles = []
+    dates = []
+    cats = []
+    urls = []
+
+    p = 1
+    still = True
+
+    while still:
+        page_url = f"https://oig.hhs.gov/fraud/enforcement/?page={p}"
+        r = requests.get(page_url)
+        s = BeautifulSoup(r.text, "html.parser")
+
+        stuff = s.find_all("li", class_="usa-card")
+
+        if stuff is None or len(stuff) == 0:
+            break
+
+        for item in stuff:
+            h2 = item.find("h2", class_="usa-card__heading")
+            if not h2:
+                continue
+
+            a = h2.find("a")
+            if not a:
+                continue
+
+            t = a.get_text(strip=True)
+            u = "https://oig.hhs.gov" + a.get("href")
+
+            d_txt = None
+            d_span = item.find("span", class_="text-base-dark")
+            if d_span:
+                d_txt = d_span.get_text(strip=True)
+
+            cat_txt = None
+            cat_li = item.find("li", class_="display-inline-block")
+            if cat_li:
+                cat_txt = cat_li.get_text(strip=True)
+
+            if d_txt:
+                try:
+                    d_real = datetime.strptime(d_txt, "%B %d, %Y")
+                    if d_real < start_dt:
+                        still = False
+                        break
+                except:
+                    pass
+
+            titles.append(t)
+            dates.append(d_txt)
+            cats.append(cat_txt)
+            urls.append(u)
+
+        p += 1
+        time.sleep(1)
+
+    df = pd.DataFrame({
+        "title": titles,
+        "date": dates,
+        "category": cats,
+        "link": urls
+    })
+
+    out_name = "enforcement_actions_year_month.csv"
+    df.to_csv(out_name, index=False)
+
+    print("saved:", out_name, "rows:", len(df))
+    return df
+
+
+
+
+
+
+
+```
+
+
+```{python}
+####
+# #  for January 2022
+if RUN_SCRAPER:
+    df_2022 = scrape_enforcement_actions(1, 2022)
+    print(f"\nTotal enforcement actions since Jan 2022: {len(df_2022)}")
+    print(f"\nEarliest action scraped:")
+    print(df_2022.tail(1))
+```
+
+
+Total enforcement actions: 1,787
+Earliest date scraped: January 3, 2024
+Earliest action(s):
+Former Nurse Aide Indicted In Death Of Clarksville Woman — State Enforcement Agencies
+
+* c. Test Your Code
+
+
+```{python}
+if RUN_SCRAPER:
+    df_2022 = get_actions_since(1, 2022)
+    print("count since Jan 2022:", len(df_2022))
+    print("earliest row (oldest):")
+    print(df_2022.tail(1))
+
+```
+
+Since January 2022
+Total enforcement actions: 3,377
+Earliest date scraped: January 4, 2022
+Earliest action(s):
+ "Integrated Pain Management Medical Group Agreed to Pay $10,000 for Allegedly Violating the Civil Monetary Penalties Law by Employing Excluded Individuals"
+  - Category: Fraud Self-Disclosures
+
+
+
+
+
+## Step 3: Plot data based on scraped data
+
+### 1. Plot the number of enforcement actions over time
+
+```{python}
+
+df = pd.read_csv("enforcement_actions_2022_1.csv")
+df["date"] = pd.to_datetime(df["date"], format="%B %d, %Y", errors="coerce")
+df["year_month"] = df["date"].dt.to_period("M").dt.to_timestamp()
+```
+
+
+```{python}
+cnt = df.groupby("year_month").size()
+cnt = cnt.reset_index()
+cnt.columns = ["year_month", "count"]
+
+chart1 = alt.Chart(cnt).mark_line(point=True).encode(
+    x=alt.X("year_month:T", title="Month"),
+    y=alt.Y("count:Q", title="Nmber of Enforcement Actions"),
+    tooltip=["year_month:T", "count:Q"]
+).properties(
+    title="HHS OIG Enforcement actions over time (since jan 2022)",
+    width=600,
+    height=350
+)
+
+chart1
+
+
+```
+
+
+### 2. Plot the number of enforcement actions categorized:
+
+* based on "Criminal and Civil Actions" vs. "State Enforcement Agencies"
+
+```{python}
+df_small = df[df["category"].isin([
+    "Criminal and Civil Actions",
+    "State Enforcement Agencies"
+])]
+
+cnt_cat = df_small.groupby(["year_month", "category"]).size()
+cnt_cat = cnt_cat.reset_index(name="count")
+
+chart2 = alt.Chart(cnt_cat).mark_line(point=True).encode(
+    x=alt.X("year_month:T", title="Month"),
+    y=alt.Y("count:Q", title="Nmber of enforcement actions"),
+    color=alt.Color("category:N"),
+    tooltip=["year_month:T", "category:N", "count:Q"]
+).properties(
+    title="criminal/civil vs state enforcement actions",
+    width=600,
+    height=350
+)
+
+chart2
+```
+
+* based on five topics
+
+```{python}
+cca = df[df["category"] == "Criminal and Civil Actions"].copy()
+
+def topic_from_title(t):
+    if pd.isna(t):
+        return "Other"
+
+    t = t.lower()
+
+    if "drug" in t or "opioid" in t or "fentanyl" in t:
+        return "Drug Enforcement"
+    if "brib" in t or "kickback" in t or "corrupt" in t:
+        return "Bribery/Corruption"
+    if "bank" in t or "wire fraud" in t or "financial" in t:
+        return "Financial Fraud"
+    if "medicare" in t or "medicaid" in t or "health" in t or "clinic" in t:
+        return "Health Care Fraud"
+    return "Other"
+
+cca["topic"] = cca["title"].apply(topic_from_title)
+
+cnt_topic = cca.groupby(["year_month", "topic"]).size()
+cnt_topic = cnt_topic.reset_index(name="count")
+
+chart3 = alt.Chart(cnt_topic).mark_line(point=True).encode(
+    x=alt.X("year_month:T", title="Month"),
+    y=alt.Y("count:Q", title="Number of Enforcement Actions"),
+    color=alt.Color("topic:N"),
+    tooltip=["year_month:T", "topic:N", "count:Q"]
+).properties(
+    title="Criminal and Civil Actions by Topic (Since Jan 2022)",
+    width=600,
+    height=350
+)
+
+chart3
+```
